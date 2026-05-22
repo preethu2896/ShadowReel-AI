@@ -198,9 +198,14 @@ export default function GenerateImage() {
           setActiveJob(null);
           setIsGenerating(false);
           const completed: JobStatusResponse = {
-            job_id, status: "completed", progress: 100,
-            prompt: params.prompt, style: params.style,
-            model: params.model, output_url: ev.output_url,
+            job_id,
+            job_type: "image",
+            status: "completed",
+            progress: 100,
+            prompt: params.prompt,
+            style: params.style,
+            model: params.model,
+            output_url: ev.output_url,
             completed_at: new Date().toISOString(),
           };
           setHistory((prev) => [completed, ...prev]);

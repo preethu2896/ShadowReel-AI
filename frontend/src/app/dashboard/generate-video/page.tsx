@@ -4,6 +4,13 @@ import { useState, useRef, useEffect } from "react";
 import { Wand2, Settings2, Video, Upload, Sparkles, Move, Clock, MonitorPlay, Layers, Volume2, Type, GripVertical, Scissors, ChevronRight, SaveAll, Database } from "lucide-react";
 import { generateVideo, subscribeToJob, type VideoModelChoice } from "@/lib/api";
 
+interface BatchItem {
+  prompt: string;
+  motionPreset: string;
+  duration: string;
+  model: string;
+}
+
 export default function GenerateVideo() {
   const [prompt, setPrompt] = useState("");
   const [mode, setMode] = useState<"text" | "image">("text");
@@ -14,7 +21,7 @@ export default function GenerateVideo() {
   const [progress, setProgress] = useState(0);
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [batchQueue, setBatchQueue] = useState<any[]>([]);
+  const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
 
   const wsCleanup = useRef<(() => void) | null>(null);
 
@@ -58,9 +65,10 @@ export default function GenerateVideo() {
       });
 
       wsCleanup.current = cleanup;
-    } catch (err: any) {
+    } catch (err) {
       setIsGenerating(false);
-      setErrorMsg(err.message || "Failed to start generation");
+      const message = err instanceof Error ? err.message : "Failed to start generation";
+      setErrorMsg(message);
     }
   };
 
@@ -302,7 +310,7 @@ export default function GenerateVideo() {
                    <Type className="w-4 h-4" /> Subtitles
                  </div>
                  <div className="h-6 w-[200px] bg-orange-500/10 border border-orange-500/30 rounded-md flex items-center px-2 ml-[50px]">
-                   <span className="text-[10px] text-orange-400">"The neon city awaits..."</span>
+                   <span className="text-[10px] text-orange-400">&quot;The neon city awaits...&quot;</span>
                  </div>
                </div>
 

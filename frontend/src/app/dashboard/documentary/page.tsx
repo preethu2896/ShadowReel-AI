@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Layers, Settings2, Play, Download, Film, Edit3, X, CheckCircle2, AlertCircle, Video, Loader2, Music, Mic, Save, Copy } from "lucide-react";
-import { createDocumentaryProject, getDocumentaryProject, type DocumentaryProject, type CreateDocumentaryParams } from "@/lib/api";
+import { Layers, Settings2, Play, Download, Film, Edit3, X, CheckCircle2, AlertCircle, Loader2, Music, Mic, Save, Copy } from "lucide-react";
+import { createDocumentaryProject, getDocumentaryProject, type DocumentaryProject, type CreateDocumentaryParams, type DocumentaryScene } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCallback } from "react";
 
@@ -52,6 +52,7 @@ export default function DocumentaryMode() {
     }, 3000);
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id, project?.status]);
 
   const handleGenerateFullDocumentary = async () => {
@@ -259,8 +260,8 @@ export default function DocumentaryMode() {
                    <div className="text-[10px] text-green-400 opacity-70 font-mono mt-1 relative z-10 flex flex-col gap-0.5">
                      <span>&gt; VRAM memory pool verified.</span>
                      <span>&gt; GPU Rendering Cluster: Nominal.</span>
-                     {project?.progress > 10 && <span>&gt; Neural director analyzing scene pacing...</span>}
-                     {project?.progress > 50 && <span>&gt; Assembling spatial audio and applying film grain...</span>}
+                     {project && project.progress > 10 && <span>&gt; Neural director analyzing scene pacing...</span>}
+                     {project && project.progress > 50 && <span>&gt; Assembling spatial audio and applying film grain...</span>}
                    </div>
                 )}
                 
@@ -307,7 +308,7 @@ export default function DocumentaryMode() {
                           <kbd className="bg-muted px-1.5 py-0.5 rounded border border-border">Ctrl</kbd>+<kbd className="bg-muted px-1.5 py-0.5 rounded border border-border">S</kbd>
                       </div>
                    </h3>
-                   {project?.scenes?.map((scene: any, i: number) => (
+                   {project?.scenes?.map((scene: DocumentaryScene, i: number) => (
                      <div key={scene.id} className="bg-card border border-border rounded p-3 text-xs flex flex-col gap-2 hover:border-purple-500/50 transition-colors cursor-pointer group relative">
                        <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                           <button className="bg-background/80 p-1 rounded hover:text-blue-400"><Copy className="w-3 h-3"/></button>
@@ -322,9 +323,9 @@ export default function DocumentaryMode() {
                            {scene.status.replace('_', ' ')}
                          </span>
                        </div>
-                       <p className="text-muted-foreground line-clamp-2 pr-6">"{scene.script_text}"</p>
+                       <p className="text-muted-foreground line-clamp-2 pr-6">&quot;{scene.script_text}&quot;</p>
                        <div className="mt-1 pt-2 border-t border-border/50 text-[10px] text-muted-foreground flex justify-between">
-                         <span className="truncate">Prompt: {scene.image_prompt.substring(0, 20)}...</span>
+                         <span className="truncate">Prompt: {scene.image_prompt?.substring(0, 20) ?? "" }...</span>
                          <span className="text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">Zoom Timeline</span>
                        </div>
                      </div>
