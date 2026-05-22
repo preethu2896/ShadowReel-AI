@@ -1,0 +1,71 @@
+# ── Dependencies ─────────────────────────────────────────────
+node_modules/
+backend/venv/
+backend/venv/pyvenv.cfg
+backend/venv/Lib/
+backend/venv/Scripts/
+backend/venv/Include/
+.pnp
+.pnp.*
+
+# ── Python Cache & Builds ────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ── Next.js Cache & Builds ───────────────────────────────────
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/node_modules/
+frontend/lint_output.txt
+
+# ── Databases ────────────────────────────────────────────────
+backend/shadowreel.db
+*.db
+*.sqlite3
+
+# ── Environment Variables ────────────────────────────────────
+.env
+.env.local
+.env.production
+.env.development
+.env.example
+!.env.example
+!frontend/.env.local.example
+!backend/.env.example
+
+# ── Temporary Outputs & Logs ─────────────────────────────────
+backend/outputs/*
+!backend/outputs/.gitkeep
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ── Certs and Secrets ────────────────────────────────────────
+nginx/certs/*
+!nginx/certs/.gitkeep
+*.pem
+*.key
+*.crt

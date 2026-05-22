@@ -1,0 +1,40 @@
+# Web framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+
+# Async DB
+sqlalchemy[asyncio]>=2.0.30
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
+alembic>=1.13.0
+
+# Redis & Queue
+redis>=5.0.3
+celery>=5.3.6
+websocket-client>=1.8.0
+
+# Pydantic
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+# HTTP client
+httpx>=0.27.0
+websockets>=12.0
+
+# File handling
+python-multipart>=0.0.9
+aiofiles>=23.2.1
+Pillow>=10.3.0
+
+# Rate limiting / utilities
+python-dotenv>=1.0.1
+PyJWT>=2.8.0
+boto3>=1.34.0
+
+# TTS
+edge-tts>=7.0.0
+gTTS>=2.5.0
+
+# System Stats
+pynvml>=11.5.0
+psutil>=5.9.0

@@ -1,0 +1,384 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shadowreel
+
+---
+
+# ---------------------------------------------------------------------------
+# Persistent Storage Configurations
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shadowreel-shared-storage-pvc
+  namespace: shadowreel
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+
+# ---------------------------------------------------------------------------
+# ConfigMaps & Secrets Example
+# ---------------------------------------------------------------------------
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shadowreel-config
+  namespace: shadowreel
+data:
+  APP_VERSION: "1.0.0"
+  DEBUG: "false"
+  USE_SQLITE: "false"
+  USE_FAKE_REDIS: "false"
+  POSTGRES_DB: "shadowreel"
+  POSTGRES_HOST: "postgres-service"
+  POSTGRES_PORT: "5432"
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  COMFYUI_HOST: "localhost"
+  COMFYUI_PORT: "8188"
+  STATIC_URL_PREFIX: "/static"
+  MAX_FILE_SIZE_MB: "100"
+  RATE_LIMIT_PER_MINUTE: "20"
+  MAX_CONCURRENT_JOBS: "5"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: shadowreel-secrets
+  namespace: shadowreel
+type: Opaque
+data:
+  # Base64 encoded values for production secrets
+  SECRET_KEY: "c3VwZXJzZWNyZXQtY2hhbmdlbWUtaW4tcHJvZHVjdGlvbi1wbGVhc2U=" # supersecret-changeme-in-production-please
+  POSTGRES_USER: "c2hhZG93cmVlbA==" # shadowreel
+  POSTGRES_PASSWORD: "c2hhZG93cmVlbF9wYXNz" # shadowreel_pass
+
+---
+
+# ---------------------------------------------------------------------------
+# Database Service (Postgres)
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+  namespace: shadowreel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: shadowreel-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: shadowreel-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shadowreel-secrets
+                  key: POSTGRES_PASSWORD
+          ports:
+            - containerPort: 5432
+          resources:
+            limits:
+              memory: 2Gi
+              cpu: "1.5"
+            requests:
+              memory: 1Gi
+              cpu: "0.5"
+          volumeMounts:
+            - name: postgres-db-vol
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-db-vol
+          persistentVolumeClaim:
+            claimName: shadowreel-shared-storage-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: shadowreel
+spec:
+  ports:
+    - port: 5432
+  selector:
+    app: postgres
+
+---
+
+# ---------------------------------------------------------------------------
+# Redis Service (Queue & PubSub)
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+  namespace: shadowreel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: ["redis-server", "--appendonly", "yes"]
+          ports:
+            - containerPort: 6379
+          resources:
+            limits:
+              memory: 1Gi
+              cpu: "1.0"
+            requests:
+              memory: 512Mi
+              cpu: "0.2"
+          volumeMounts:
+            - name: redis-data-vol
+              mountPath: /data
+      volumes:
+        - name: redis-data-vol
+          persistentVolumeClaim:
+            claimName: shadowreel-shared-storage-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: shadowreel
+spec:
+  ports:
+    - port: 6379
+  selector:
+    app: redis
+
+---
+
+# ---------------------------------------------------------------------------
+# FastAPI API Server Deployment
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-deployment
+  namespace: shadowreel
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: yourregistry/shadowreel-backend:latest
+          envFrom:
+            - configMapRef:
+                name: shadowreel-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: shadowreel-secrets
+                  key: SECRET_KEY
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: shadowreel-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shadowreel-secrets
+                  key: POSTGRES_PASSWORD
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          resources:
+            limits:
+              memory: 2Gi
+              cpu: "2.0"
+            requests:
+              memory: 1Gi
+              cpu: "0.5"
+          volumeMounts:
+            - name: outputs-volume
+              mountPath: /app/outputs
+      volumes:
+        - name: outputs-volume
+          persistentVolumeClaim:
+            claimName: shadowreel-shared-storage-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: shadowreel
+spec:
+  ports:
+    - port: 8000
+      targetPort: 8000
+  selector:
+    app: api
+
+---
+
+# ---------------------------------------------------------------------------
+# Celery GPU Video/Image Workers
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-gpu-worker-deployment
+  namespace: shadowreel
+spec:
+  replicas: 1 # Scaled based on GPU node availability
+  selector:
+    matchLabels:
+      app: celery-gpu-worker
+  template:
+    metadata:
+      labels:
+        app: celery-gpu-worker
+    spec:
+      containers:
+        - name: worker
+          image: yourregistry/shadowreel-backend:latest
+          command: ["celery", "-A", "workers.celery_app", "worker", "--loglevel=info", "-Q", "image,video", "--concurrency=1"]
+          envFrom:
+            - configMapRef:
+                name: shadowreel-config
+          env:
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: shadowreel-secrets
+                  key: SECRET_KEY
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: shadowreel-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shadowreel-secrets
+                  key: POSTGRES_PASSWORD
+          resources:
+            limits:
+              nvidia.com/gpu: 1  # Standard NVIDIA GPU request
+              memory: 16Gi
+              cpu: "4.0"
+            requests:
+              nvidia.com/gpu: 1
+              memory: 8Gi
+              cpu: "2.0"
+          volumeMounts:
+            - name: outputs-volume
+              mountPath: /app/outputs
+      volumes:
+        - name: outputs-volume
+          persistentVolumeClaim:
+            claimName: shadowreel-shared-storage-pvc
+
+---
+
+# ---------------------------------------------------------------------------
+# Next.js Frontend Deployment
+# ---------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-deployment
+  namespace: shadowreel
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: yourregistry/shadowreel-frontend:latest
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: 1.5Gi
+              cpu: "1.0"
+            requests:
+              memory: 512Mi
+              cpu: "0.2"
+          env:
+            - name: NEXT_PUBLIC_API_URL
+              value: "http://api-service.shadowreel.svc.cluster.local:8000"
+            - name: NEXT_PUBLIC_WS_URL
+              value: "ws://api-service.shadowreel.svc.cluster.local:8000"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: shadowreel
+spec:
+  ports:
+    - port: 80
+      targetPort: 3000
+  selector:
+    app: frontend
+  type: LoadBalancer

@@ -1,0 +1,132 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL ───────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: shadowreel_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: shadowreel
+      POSTGRES_PASSWORD: shadowreel_pass
+      POSTGRES_DB: shadowreel
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shadowreel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: shadowreel_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --save 20 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI Backend ──────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: shadowreel_api
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      COMFYUI_HOST: host.docker.internal   # ComfyUI running on host
+      COMFYUI_PORT: 8188
+      DEBUG: "true"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/outputs:/app/outputs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      uvicorn main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+      --log-level debug
+
+  # ── Celery Worker ────────────────────────────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: shadowreel_worker
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+      COMFYUI_HOST: host.docker.internal
+      COMFYUI_PORT: 8188
+    volumes:
+      - ./backend/outputs:/app/outputs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      celery -A workers.celery_app worker
+      --loglevel=info
+      --concurrency=2
+      -Q generation
+      --pool=solo
+
+  # ── Celery Flower (monitoring) ───────────────────────────
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: shadowreel_flower
+    restart: unless-stopped
+    env_file: ./backend/.env
+    environment:
+      REDIS_HOST: redis
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    command: >
+      celery -A workers.celery_app flower
+      --port=5555
+      --broker=redis://redis:6379/0
+
+  # ── Next.js Frontend ─────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    container_name: shadowreel_frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
